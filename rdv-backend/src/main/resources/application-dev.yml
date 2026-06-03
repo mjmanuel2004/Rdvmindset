@@ -5,7 +5,7 @@
 spring:
   # ── DataSource ─────────────────────────────
   datasource:
-    url: jdbc:postgresql://localhost:${POSTGRES_PORT:5432}/${POSTGRES_DB:rdvmindset}
+    url: jdbc:postgresql://localhost:${POSTGRES_PORT:5433}/${POSTGRES_DB:rdvmindset}
     username: ${POSTGRES_USER:dev_user}
     password: ${POSTGRES_PASSWORD:dev_password_123}
     driver-class-name: org.postgresql.Driver
