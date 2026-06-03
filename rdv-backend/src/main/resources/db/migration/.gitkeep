@@ -1,0 +1,2 @@
+-- Placeholder : les migrations seront ajoutées en Phase 1.
+-- Ce fichier assure que Flyway trouve le répertoire au démarrage.

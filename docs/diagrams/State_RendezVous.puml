@@ -1,0 +1,67 @@
+@startuml State_RendezVous
+skinparam shadowing false
+skinparam backgroundColor #FAFAFA
+skinparam state {
+  BackgroundColor #E6F1FB
+  BorderColor #185FA5
+  ArrowColor #185FA5
+  FontSize 12
+  StartColor #1A3C5E
+  EndColor #1A3C5E
+}
+
+title RdvMindset — États d'un Rendez-vous
+
+[*] --> EN_ATTENTE : Agent IA collecte infos
+
+state EN_ATTENTE {
+  [*] --> Validation : Infos reçues\nde l'agent IA
+  Validation --> DispoVerifiee : Créneau disponible
+  Validation --> DispoIndispo : Créneau pris\n→ nouvelle proposition
+  DispoIndispo --> Validation : Client choisit\nautre créneau
+}
+
+EN_ATTENTE --> CONFIRME : Client confirme\nle créneau
+EN_ATTENTE --> ANNULE : Client raccroche\nou abandonne
+
+state CONFIRME {
+  [*] --> RappelJ7 : Création RDV
+  RappelJ7 --> RappelJ1 : Rappel envoyé J-7
+  RappelJ1 --> Veille : Rappel envoyé J-1
+  Veille --> JourJ : Jour du RDV
+}
+
+CONFIRME --> ANNULE : Annulation\n(client ou entreprise)
+CONFIRME --> REPORTE : Report demandé
+
+REPORTE --> CONFIRME : Nouveau créneau\nconfirmé
+REPORTE --> ANNULE : Aucun créneau\nconvenable
+
+state COMPLETE {
+  [*] --> Satisfaction : RDV effectué
+  Satisfaction --> FeedbackEnvoye : Email post-RDV
+}
+
+CONFIRME --> COMPLETE : RDV effectué ✓
+CONFIRME --> NO_SHOW : Client absent\nsans prévenir
+
+NO_SHOW --> ANNULE : Marqué absent
+NO_SHOW --> REPORTE : Rattrapage proposé
+
+ANNULE --> [*] : RDV archivé
+COMPLETE --> [*] : RDV archivé
+
+note right of CONFIRME
+  À chaque changement d'état :
+  - Mise à jour PostgreSQL
+  - Sync Google Calendar
+  - Notification client (email/SMS)
+  - Mise à jour dashboard (WebSocket)
+end note
+
+note right of NO_SHOW
+  Déclenche un workflow n8n
+  de relance automatique
+end note
+
+@enduml

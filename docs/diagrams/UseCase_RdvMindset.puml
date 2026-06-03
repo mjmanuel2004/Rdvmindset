@@ -1,0 +1,100 @@
+@startuml UseCase_RdvMindset
+skinparam shadowing false
+skinparam backgroundColor #FAFAFA
+skinparam actorStyle awesome
+skinparam usecase {
+  BackgroundColor #E6F1FB
+  BorderColor #185FA5
+  ArrowColor #185FA5
+  FontSize 13
+}
+skinparam actor {
+  BackgroundColor #D6E4F0
+  BorderColor #1A3C5E
+}
+
+title RdvMindset — Diagramme de Cas d'Utilisation
+
+' ── Acteurs ─────────────────────────────────────
+actor "Super Admin\n(Équipe RdvMindset)" as ADMIN
+actor "Entreprise\n(Client B2B)" as ENTREPRISE
+actor "Client Final\n(B2C)" as CLIENT
+actor "Agent IA\n(Vapi / Botpress)" as IA
+
+' ── Système ──────────────────────────────────────
+rectangle "Plateforme RdvMindset" {
+
+  ' Périmètre Admin
+  package "Administration" {
+    usecase "Créer un modèle\nsectoriel" as UC_MODEL
+    usecase "Configurer les\nprompts IA" as UC_PROMPT
+    usecase "Gérer les\nabonnements" as UC_ABO
+    usecase "Superviser la\nplateforme" as UC_SUPER
+  }
+
+  ' Périmètre Entreprise
+  package "Gestion Entreprise" {
+    usecase "S'inscrire /\nOnboarding" as UC_ONBOARD
+    usecase "Synchroniser\nson calendrier" as UC_CAL
+    usecase "Configurer\nson agent IA" as UC_AGENT
+    usecase "Consulter le\ndashboard" as UC_DASH
+    usecase "Gérer les\nrendez-vous" as UC_RDV_MGMT
+    usecase "Voir l'historique\ndes appels" as UC_LOG
+  }
+
+  ' Périmètre Client Final
+  package "Prise de Rendez-vous" {
+    usecase "Prendre RDV\npar téléphone" as UC_PHONE
+    usecase "Prendre RDV\nvia chatbot" as UC_CHAT
+    usecase "Annuler / Modifier\nun RDV" as UC_CANCEL
+    usecase "Consulter son\nespace personnel" as UC_ESPACE
+  }
+
+  ' Périmètre Agent IA
+  package "Agents IA" {
+    usecase "Gérer le\ndialogue vocal" as UC_VOCAL
+    usecase "Gérer le\ndialogue textuel" as UC_TEXT
+    usecase "Vérifier les\ndisponibilités" as UC_DISPO
+    usecase "Créer un RDV\nautomatiquement" as UC_CREATE
+  }
+}
+
+' ── Relations Admin ──────────────────────────────
+ADMIN --> UC_MODEL
+ADMIN --> UC_PROMPT
+ADMIN --> UC_ABO
+ADMIN --> UC_SUPER
+
+' ── Relations Entreprise ─────────────────────────
+ENTREPRISE --> UC_ONBOARD
+ENTREPRISE --> UC_CAL
+ENTREPRISE --> UC_AGENT
+ENTREPRISE --> UC_DASH
+ENTREPRISE --> UC_RDV_MGMT
+ENTREPRISE --> UC_LOG
+
+' ── Relations Client Final ────────────────────────
+CLIENT --> UC_PHONE
+CLIENT --> UC_CHAT
+CLIENT --> UC_CANCEL
+CLIENT --> UC_ESPACE
+
+' ── Relations Agent IA ───────────────────────────
+IA --> UC_VOCAL
+IA --> UC_TEXT
+IA --> UC_DISPO
+IA --> UC_CREATE
+
+' ── Include / Extend ─────────────────────────────
+UC_PHONE ..> UC_VOCAL : <<include>>
+UC_CHAT ..> UC_TEXT   : <<include>>
+UC_VOCAL ..> UC_DISPO : <<include>>
+UC_TEXT ..> UC_DISPO  : <<include>>
+UC_DISPO ..> UC_CREATE : <<include>>
+
+UC_ONBOARD ..> UC_CAL   : <<include>>
+UC_ONBOARD ..> UC_AGENT : <<include>>
+
+UC_CANCEL ..> UC_ESPACE : <<extend>>
+
+@enduml

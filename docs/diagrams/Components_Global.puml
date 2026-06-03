@@ -1,0 +1,133 @@
+@startuml Components_Global
+skinparam shadowing false
+skinparam backgroundColor #FAFAFA
+skinparam component {
+  BackgroundColor #E6F1FB
+  BorderColor #185FA5
+  FontSize 12
+}
+skinparam database {
+  BackgroundColor #E1F5EE
+  BorderColor #0F6E56
+}
+skinparam node {
+  BackgroundColor #F5F7FA
+  BorderColor #E0E6ED
+}
+skinparam interface {
+  BackgroundColor #FFF3CD
+  BorderColor #BA7517
+}
+skinparam ArrowColor #185FA5
+
+title RdvMindset — Diagramme de Composants
+
+' ── Couche Client ────────────────────────────────
+node "Navigateur / Mobile" {
+  [Frontend React\n(Next.js)] as REACT
+}
+
+node "Téléphone" {
+  [Client Final\n(Appel entrant)] as PHONE
+}
+
+' ── Couche API Gateway ────────────────────────────
+node "Spring Cloud Gateway\n(port 8080)" {
+  [JWT Filter] as JWT_F
+  [Rate Limiter] as RATE
+  [Router] as ROUTER
+}
+
+' ── Couche IA — n8n ──────────────────────────────
+node "Zone n8n (Orchestration IA)" {
+  [n8n Workflow Engine] as N8N
+  component "Connecteurs n8n" {
+    [Vapi Connector] as V_CON
+    [Botpress Connector] as B_CON
+    [Calendar Connector] as C_CON
+    [CRM Connector] as CRM_CON
+  }
+}
+
+' ── Agents IA externes ────────────────────────────
+cloud "Services IA Tiers" {
+  [Vapi\n(Agent Vocal)] as VAPI
+  [Botpress\n(Chatbot)] as BOTPRESS
+}
+
+' ── Couche Spring Boot ────────────────────────────
+node "Spring Boot Core (port 8081)" {
+  component "Modules Métier" {
+    [RdvService] as RDV_SVC
+    [AgentService] as AGT_SVC
+    [CalendarService] as CAL_SVC
+    [NotificationService] as NOTIF_SVC
+    [WebhookService] as WH_SVC
+    [AuthService] as AUTH_SVC
+  }
+}
+
+' ── Message Queue ─────────────────────────────────
+node "Message Queue" {
+  [Redis Streams / RabbitMQ] as QUEUE
+}
+
+' ── Couche Données ────────────────────────────────
+node "Couche Données" {
+  database "PostgreSQL" as PG
+  database "Redis Cache" as REDIS
+}
+
+' ── APIs Externes ─────────────────────────────────
+cloud "APIs Externes" {
+  [Google Calendar API] as GCAL
+  [Outlook API] as OUTLOOK
+  [SendGrid / SMTP] as MAIL
+  [Twilio (SMS)] as TWILIO
+}
+
+' ── Relations Gateway ────────────────────────────
+REACT --> JWT_F : HTTPS REST\n+ WebSocket
+JWT_F --> RATE
+RATE --> ROUTER
+ROUTER --> RDV_SVC : /api/v1/rdv
+ROUTER --> AUTH_SVC : /api/v1/auth
+ROUTER --> AGT_SVC : /api/v1/agent
+
+' ── Relations IA ─────────────────────────────────
+PHONE --> VAPI : Appel téléphonique
+VAPI <--> V_CON : Webhook ↔ API
+BOTPRESS <--> B_CON : Webhook ↔ API
+V_CON --> N8N
+B_CON --> N8N
+N8N --> C_CON
+N8N --> CRM_CON
+
+' ── n8n ↔ Queue ─────────────────────────────────
+N8N --> QUEUE : PUBLISH events\n(async)
+QUEUE --> N8N : CONSUME responses
+
+' ── Spring Boot ↔ Queue ─────────────────────────
+QUEUE --> WH_SVC : CONSUME rdv:verify\nrdv:create
+RDV_SVC --> QUEUE : PUBLISH rdv:result\nrdv:created
+
+' ── Spring Boot interne ───────────────────────────
+WH_SVC --> RDV_SVC
+RDV_SVC --> CAL_SVC
+RDV_SVC --> NOTIF_SVC
+AGT_SVC --> VAPI : CREATE assistant
+AGT_SVC --> BOTPRESS : CREATE bot
+
+' ── Persistance ──────────────────────────────────
+RDV_SVC --> PG : JPA/JDBC
+AUTH_SVC --> PG
+CAL_SVC --> REDIS : cache dispos
+NOTIF_SVC --> REDIS : sessions
+
+' ── APIs Externes ────────────────────────────────
+CAL_SVC --> GCAL : OAuth2\nFreeBusy API
+CAL_SVC --> OUTLOOK : OAuth2
+NOTIF_SVC --> MAIL : SMTP/API
+NOTIF_SVC --> TWILIO : REST API
+
+@enduml

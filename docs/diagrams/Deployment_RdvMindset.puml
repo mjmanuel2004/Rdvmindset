@@ -1,0 +1,96 @@
+@startuml Deployment_RdvMindset
+skinparam shadowing false
+skinparam backgroundColor #FAFAFA
+skinparam node {
+  BackgroundColor #E6F1FB
+  BorderColor #185FA5
+  FontSize 12
+}
+skinparam database {
+  BackgroundColor #E1F5EE
+  BorderColor #0F6E56
+}
+skinparam cloud {
+  BackgroundColor #FFF3CD
+  BorderColor #BA7517
+}
+skinparam ArrowColor #185FA5
+
+title RdvMindset — Diagramme de Déploiement (Docker / Kubernetes)
+
+node "Client" {
+  [Navigateur Web\n/ App Mobile] as BROWSER
+  [Téléphone\nClient Final] as PHONE
+}
+
+cloud "CDN / DNS\n(CloudFlare)" {
+  [Load Balancer] as LB
+}
+
+node "Kubernetes Cluster (AWS/GCP)" {
+
+  node "Ingress Controller" {
+    [NGINX Ingress] as NGINX
+  }
+
+  node "Pod : Frontend\n(Next.js)" {
+    artifact "next-app:latest" as NEXT
+  }
+
+  node "Pod : API Gateway\n(Spring Cloud Gateway)" {
+    artifact "rdv-gateway:latest" as GW
+  }
+
+  node "Pod : Spring Boot Core" {
+    artifact "rdv-backend:latest" as BACK
+  }
+
+  node "Pod : n8n\n(Orchestration IA)" {
+    artifact "n8n:latest" as N8N
+  }
+
+  node "Pod : Redis" {
+    database "Redis 7\n(Cache + Queue)" as REDIS
+  }
+
+  node "StatefulSet : PostgreSQL" {
+    database "PostgreSQL 16\n(Primary)" as PG_PRIMARY
+    database "PostgreSQL 16\n(Replica)" as PG_REPLICA
+  }
+
+}
+
+cloud "Services Tiers" {
+  [Vapi Cloud\n(Agent Vocal)] as VAPI
+  [Botpress Cloud\n(Chatbot)] as BOTPRESS
+  [Google APIs\n(Calendar + OAuth2)] as GOOGLE
+  [Twilio\n(SMS)] as TWILIO
+  [SendGrid\n(Email)] as SENDGRID
+}
+
+node "Monitoring (hors cluster)" {
+  [Prometheus\n+ Grafana] as PROM
+  [ELK Stack\n(Logs)] as ELK
+}
+
+' ── Flux ──────────────────────────────────────────
+BROWSER --> LB : HTTPS
+PHONE --> VAPI : Appel GSM
+LB --> NGINX : HTTPS
+NGINX --> NEXT : /  (frontend)
+NGINX --> GW : /api/*
+GW --> BACK : HTTP interne
+BACK <--> REDIS : Cache + Queue
+BACK --> PG_PRIMARY : JDBC
+PG_PRIMARY --> PG_REPLICA : Réplication
+N8N <--> REDIS : Consume / Publish
+N8N <--> VAPI : Webhook API
+N8N <--> BOTPRESS : Webhook API
+BACK --> GOOGLE : OAuth2 + Calendar
+BACK --> TWILIO : SMS
+BACK --> SENDGRID : Emails
+BACK --> PROM : /actuator/prometheus
+N8N --> PROM : Métriques
+BACK --> ELK : Logs JSON
+
+@enduml

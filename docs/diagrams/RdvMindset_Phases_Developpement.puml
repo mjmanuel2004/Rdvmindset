@@ -1,0 +1,650 @@
+@startuml RdvMindset_Phases_Developpement
+skinparam shadowing false
+
+skinparam backgroundColor #FAFAFA
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+
+skinparam activity {
+  BackgroundColor #E6F1FB
+  BorderColor #185FA5
+  FontColor #0C447C
+  FontSize 12
+  ArrowColor #185FA5
+  ArrowFontColor #444441
+  ArrowFontSize 11
+  DiamondBackgroundColor #FFF3CD
+  DiamondBorderColor #BA7517
+  DiamondFontColor #633806
+  StartColor #1A3C5E
+  EndColor #1A3C5E
+}
+
+skinparam note {
+  BackgroundColor #F1EFE8
+  BorderColor #888780
+  FontColor #2C2C2A
+  FontSize 11
+}
+
+title RdvMindset — Phases de développement (du zéro à la production)
+
+|#E6F1FB| **PHASE 0**\nEnvironnement |
+|#EAF3DE| **PHASE 1**\nBase de données |
+|#EEEDFE| **PHASE 2**\nSécurité |
+|#E6F1FB| **PHASE 3**\nCore métier |
+|#FAEEDA| **PHASE 4**\nQueue & n8n |
+|#FAECE7| **PHASE 5**\nVapi vocal |
+|#FAECE7| **PHASE 6**\nBotpress chat |
+|#EEEDFE| **PHASE 7**\nFrontend |
+|#FAEEDA| **PHASE 8**\nWorkflows avancés |
+|#EAF3DE| **PHASE 9**\nTests |
+|#F1EFE8| **PHASE 10**\nDevOps |
+
+' ═══════════════════════════════════════════════════════════
+' PHASE 0 — ENVIRONNEMENT
+' ═══════════════════════════════════════════════════════════
+
+|**PHASE 0**\nEnvironnement|
+
+start
+
+:📦 **PHASE 0 — Mise en place de l'environnement**
+~~3 jours~~;
+
+fork
+  :Installer Java 21 (SDKMAN)
+  + Maven 3.9;
+fork again
+  :Installer Node 20 (nvm)
+  + pnpm;
+fork again
+  :Docker Desktop
+  + Docker Compose;
+end fork
+
+:Créer repo GitHub
+Branch : main / develop / feature/*;
+
+fork
+  :Init Spring Boot 3.x
+  (Spring Initializr)
+  Web, Security, JPA,
+  Redis, Mail, WebSocket;
+fork again
+  :Init Next.js 14
+  App Router
+  TypeScript + Tailwind CSS;
+fork again
+  :docker-compose.yml
+  postgres + redis + n8n;
+end fork
+
+:Configurer IntelliJ IDEA
++ VS Code + Postman + TablePlus;
+
+note right
+  Livrables :
+  - Repo GitHub initialisé
+  - Spring Boot démarre (port 8080)
+  - Next.js démarre (port 3000)
+  - PostgreSQL + Redis actifs
+end note
+
+' ═══════════════════════════════════════════════════════════
+' PHASE 1 — BASE DE DONNÉES
+' ═══════════════════════════════════════════════════════════
+
+|**PHASE 1**\nBase de données|
+
+:📊 **PHASE 1 — Base de données & modèle de données**
+~~1 semaine~~;
+
+:Configurer Flyway dans application.yml
+spring.flyway.enabled=true;
+
+fork
+  :V1__init.sql
+  entreprises, users, plans;
+fork again
+  :V2__agents.sql
+  agents, agent_configs;
+fork again
+  :V3__rdv.sql
+  rendez_vous, disponibilites,
+  calendar_tokens;
+fork again
+  :V4__logs.sql
+  call_logs, chat_logs,
+  notifications, audit_trail;
+end fork
+
+:Créer entités JPA
+@Entity, @Id, @OneToMany, @ManyToOne
+(Entreprise, Agent, RendezVous,
+ Client, CallLog, ChatLog);
+
+:Créer Repository interfaces
+JpaRepository + requêtes JPQL custom
++ Pageable;
+
+:Tester migrations Flyway
++ insérer données de test (seed);
+
+note right
+  Livrables :
+  - 9 tables créées en base
+  - Entités JPA mappées
+  - Repositories fonctionnels
+  - Seed data disponible
+end note
+
+' ═══════════════════════════════════════════════════════════
+' PHASE 2 — SÉCURITÉ
+' ═══════════════════════════════════════════════════════════
+
+|**PHASE 2**\nSécurité|
+
+:🔒 **PHASE 2 — Authentification & sécurité**
+~~1 semaine~~;
+
+:Configurer SecurityFilterChain
+CSRF disable, Stateless, CORS;
+
+fork
+  :Écrire JwtUtils
+  generate / validate / extract;
+fork again
+  :Écrire JwtAuthFilter
+  OncePerRequestFilter;
+end fork
+
+:Implémenter UserDetailsService
+Charger user depuis PostgreSQL;
+
+:Créer AuthController
+POST /auth/register
+POST /auth/login
+POST /auth/refresh;
+
+:Configurer rôles @PreAuthorize
+SUPER_ADMIN / ENTREPRISE / CLIENT;
+
+fork
+  :OAuth2 Google Calendar
+  Authorization URL + Callback;
+fork again
+  :Stocker CalendarToken chiffré
+  AES-256 en base;
+end fork
+
+:Tester flux JWT complet
+register → login → token
+→ appel sécurisé (Postman);
+
+note right
+  Livrables :
+  - Auth JWT stateless fonctionnelle
+  - 3 rôles configurés
+  - OAuth2 Google Calendar OK
+  - Tokens chiffrés en base
+end note
+
+' ═══════════════════════════════════════════════════════════
+' PHASE 3 — CORE MÉTIER
+' ═══════════════════════════════════════════════════════════
+
+|**PHASE 3**\nCore métier|
+
+:⚙️ **PHASE 3 — Core métier Spring Boot**
+~~2 semaines~~;
+
+' Semaine 1
+:--- Semaine A : Services métier ---;
+
+fork
+  :EntrepriseService
+  CRUD + profil + config;
+fork again
+  :DisponibiliteService
+  Plages horaires par entreprise;
+fork again
+  :CalendarService (Google)
+  WebClient + FreeBusy API
+  + createEvent;
+end fork
+
+fork
+  :RdvService
+  verifierDispos()
+  creerRdv() / annulerRdv();
+fork again
+  :NotificationService
+  Spring Mail + Thymeleaf
+  + Twilio SMS;
+end fork
+
+' Semaine 2
+:--- Semaine B : API REST + WebSocket ---;
+
+fork
+  :RdvController
+  GET/POST /rdv
+  PATCH /rdv/{id}/cancel;
+fork again
+  :EntrepriseController
+  GET/PUT /entreprise
+  GET /entreprise/{id}/stats;
+fork again
+  :AnalyticsController
+  taux remplissage
+  appels / no-shows;
+end fork
+
+:Configurer Spring WebSocket STOMP
+/topic/entreprise/{id}/rdv;
+
+:Configurer Spring Cache + Redis
+@Cacheable sur getDisponibilites();
+
+:GlobalExceptionHandler
+@ControllerAdvice
+404 / 409 / 401 / 400;
+
+:Tester tous les endpoints
+Collection Postman complète;
+
+note right
+  Livrables :
+  - API REST complète et sécurisée
+  - WebSocket STOMP fonctionnel
+  - Cache Redis actif
+  - Collection Postman exportée
+end note
+
+' ═══════════════════════════════════════════════════════════
+' PHASE 4 — QUEUE & N8N
+' ═══════════════════════════════════════════════════════════
+
+|**PHASE 4**\nQueue & n8n|
+
+:🔄 **PHASE 4 — Message Queue — n8n ↔ Spring Boot**
+~~1 semaine~~;
+
+fork
+  :Configurer Redis Streams
+  Spring Boot côté
+  RedisTemplate + StreamOperations;
+fork again
+  :Installer n8n via Docker
+  + volume persistant;
+end fork
+
+fork
+  :MessageQueueService.publier()
+  XADD rdv:verify / rdv:create;
+fork again
+  :@StreamListener consumers
+  rdv:verify → RdvService
+  rdv:create → RdvService;
+end fork
+
+:Configurer n8n → Redis
+Node Redis + credentials;
+
+fork
+  :Workflow n8n n°1
+  Webhook reçu
+  → PUBLISH rdv:verify → queue;
+fork again
+  :Workflow n8n n°2
+  CONSUME rdv:dispo_result
+  → Redis XREAD polling;
+end fork
+
+:Tester bout-en-bout queue async
+Postman → n8n → Queue
+→ Spring Boot → réponse;
+
+note right
+  Livrables :
+  - Queue Redis Streams opérationnelle
+  - n8n publie et consomme
+  - Spring Boot consomme sans blocage
+  - Communication async validée
+end note
+
+' ═══════════════════════════════════════════════════════════
+' PHASE 5 — VAPI
+' ═══════════════════════════════════════════════════════════
+
+|**PHASE 5**\nVapi vocal|
+
+:📞 **PHASE 5 — Intégration Vapi (agent vocal)**
+~~1 semaine~~;
+
+:Créer compte Vapi
+API Key → stocker dans .env;
+
+fork
+  :AgentService.creerAgentVapi()
+  POST /assistant via WebClient
+  systemPrompt par secteur;
+fork again
+  :Créer templates prompt
+  Santé / Beauté / Consulting
+  variables dynamiques;
+end fork
+
+:Configurer webhook Vapi → n8n
+serverUrl = ngrok + /webhook/vapi;
+
+fork
+  :Workflow n8n : call.ended
+  Extract nom, date, motif
+  depuis transcription;
+fork again
+  :Workflow n8n : proposer créneaux
+  POST /vapi/call/{id}/say
+  → réponse vocale client;
+end fork
+
+:Workflow n8n : confirmer RDV
+Client choisit → PUBLISH rdv:create;
+
+:Test appel téléphonique réel
+Appel → RDV créé BDD + Calendar;
+
+note right
+  Livrables :
+  - Agent vocal créé par API
+  - Numéro de téléphone unique
+  - Flux appel complet fonctionnel
+  - RDV créé automatiquement
+end note
+
+' ═══════════════════════════════════════════════════════════
+' PHASE 6 — BOTPRESS
+' ═══════════════════════════════════════════════════════════
+
+|**PHASE 6**\nBotpress chat|
+
+:💬 **PHASE 6 — Intégration Botpress (chatbot)**
+~~1 semaine~~;
+
+:Créer compte Botpress
+Nouveau bot → configurer flux;
+
+fork
+  :Flux conversation Botpress
+  Collect prénom / date / motif
+  Cards de confirmation;
+fork again
+  :AgentService.creerAgentBotpress()
+  POST /api/bots
+  via Botpress API;
+end fork
+
+:Configurer webhook Botpress → n8n
+conversation.end → POST n8n;
+
+:Workflow n8n : receive chat webhook
+Même logique que Vapi
+(réutiliser workflow existant);
+
+:WebhookController sécurisé
+Validation HMAC-SHA256
+pour Vapi + Botpress;
+
+:Générer script d'intégration
+POST /api/v1/agent/{id}/script
+→ iframe / SDK JS;
+
+:Test chat complet bout-en-bout
+Chat → RDV créé BDD + Calendar;
+
+note right
+  Livrables :
+  - Chatbot Botpress configuré
+  - Script iframe généré
+  - Webhook sécurisé HMAC
+  - Flux chat = flux vocal réutilisé
+end note
+
+' ═══════════════════════════════════════════════════════════
+' PHASE 7 — FRONTEND
+' ═══════════════════════════════════════════════════════════
+
+|**PHASE 7**\nFrontend|
+
+:🖥️ **PHASE 7 — Frontend React / Next.js**
+~~2 semaines~~;
+
+' Semaine 1
+:--- Semaine A : Auth + structure ---;
+
+fork
+  :Axios + intercepteurs JWT
+  attach token + refresh auto;
+fork again
+  :Zustand — useAuthStore
+  user / token / rôle;
+end fork
+
+fork
+  :Pages Login / Register
+  React Hook Form + Zod;
+fork again
+  :Middleware Next.js
+  Routes protégées par rôle;
+fork again
+  :Layout sidebar + navbar
+  Tailwind + shadcn/ui;
+end fork
+
+:Wizard onboarding 5 étapes
+Stepper : profil → calendrier
+→ agent → test → prod;
+
+' Semaine 2
+:--- Semaine B : Dashboard ---;
+
+fork
+  :Calendrier interactif RDV
+  TanStack Query + FullCalendar;
+fork again
+  :WebSocket temps réel
+  SockJS + @stomp/stompjs
+  useRdvRealtime hook;
+end fork
+
+fork
+  :Page historique appels
+  Transcriptions + call_logs;
+fork again
+  :Page config agent IA
+  systemPrompt / FAQ / tarifs;
+fork again
+  :Page analytics
+  Recharts — stats & KPIs;
+end fork
+
+fork
+  :Dashboard Super Admin
+  Toutes entreprises + monitoring;
+fork again
+  :Espace client B2C
+  Mes RDV / modifier / annuler;
+end fork
+
+note right
+  Livrables :
+  - Auth frontend complète
+  - Onboarding 5 étapes
+  - Dashboard temps réel
+  - Admin + espace B2C
+end note
+
+' ═══════════════════════════════════════════════════════════
+' PHASE 8 — WORKFLOWS AVANCÉS
+' ═══════════════════════════════════════════════════════════
+
+|**PHASE 8**\nWorkflows avancés|
+
+:🤖 **PHASE 8 — Workflows n8n avancés**
+~~1 semaine~~;
+
+fork
+  :Rappel J-7 automatique
+  Cron n8n → GET /rdv
+  → email client;
+fork again
+  :Rappel J-1 automatique
+  Cron n8n + SMS
+  via Spring Boot;
+end fork
+
+fork
+  :Détection no-show
+  Cron post-RDV
+  → UPDATE statut BDD;
+fork again
+  :Email satisfaction post-RDV
+  2h après → questionnaire;
+end fork
+
+fork
+  :Rapport mensuel PDF
+  Cron 1er du mois
+  → stats → PDF → email;
+fork again
+  :Intégration CRM (optionnel)
+  n8n node HubSpot
+  → push contact + deal;
+end fork
+
+:Workflow error handling
+Retry automatique 3 tentatives
+sur chaque workflow;
+
+note right
+  Livrables :
+  - Rappels J-7 et J-1 actifs
+  - No-shows détectés auto
+  - Rapports PDF mensuels
+  - Retry sur erreurs
+end note
+
+' ═══════════════════════════════════════════════════════════
+' PHASE 9 — TESTS
+' ═══════════════════════════════════════════════════════════
+
+|**PHASE 9**\nTests|
+
+:✅ **PHASE 9 — Tests & qualité**
+~~1 semaine~~;
+
+fork
+  :Tests unitaires Spring Boot
+  JUnit 5 + Mockito
+  RdvService / CalendarService
+  / WebhookService;
+fork again
+  :Tests intégration API
+  @SpringBootTest
+  + Testcontainers PostgreSQL;
+end fork
+
+fork
+  :Tests sécurité
+  MockMvc + @WithMockUser
+  par rôle (3 rôles);
+fork again
+  :Tests React
+  Vitest + RTL
+  hooks + formulaires;
+end fork
+
+:Tests E2E Playwright
+Onboarding complet
++ prise RDV chat;
+
+:Test flux Vapi simulé
+Mock webhook → RDV créé
+bout-en-bout;
+
+note right
+  Livrables :
+  - Coverage > 70% backend
+  - Tests E2E passants
+  - 0 régression critique
+  - Rapport de tests généré
+end note
+
+' ═══════════════════════════════════════════════════════════
+' PHASE 10 — DEVOPS
+' ═══════════════════════════════════════════════════════════
+
+|**PHASE 10**\nDevOps|
+
+:🚀 **PHASE 10 — DevOps & déploiement**
+~~1 semaine~~;
+
+fork
+  :Dockerfile Spring Boot
+  multi-stage
+  FROM eclipse-temurin:21-jdk;
+fork again
+  :Dockerfile Next.js
+  multi-stage
+  FROM node:20-alpine;
+end fork
+
+:docker-compose.prod.yml
+app + gateway + postgres
++ redis + n8n;
+
+:Variables d'environnement
+Secrets GitHub Actions
+(API keys, DB, JWT secret);
+
+fork
+  :Pipeline CI — Tests
+  push → mvn test + pnpm test;
+fork again
+  :Pipeline CD — Build
+  build image → push
+  GitHub Container Registry;
+fork again
+  :Pipeline CD — Deploy
+  SSH → docker compose
+  pull + up (staging);
+end fork
+
+fork
+  :Spring Actuator + Prometheus
+  /health + /metrics exposés;
+fork again
+  :Dashboard Grafana
+  CPU / latence / erreurs;
+end fork
+
+:Domaine + SSL HTTPS
+nginx reverse proxy
++ Let's Encrypt;
+
+:🟢 **PRODUCTION**
+Application live et opérationnelle;
+
+note right
+  Livrables :
+  - Images Docker buildées
+  - CI/CD GitHub Actions actif
+  - Staging déployé et testé
+  - Monitoring Grafana actif
+  - HTTPS configuré
+end note
+
+stop
+
+@enduml

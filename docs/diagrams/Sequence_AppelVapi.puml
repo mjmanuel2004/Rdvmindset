@@ -1,0 +1,114 @@
+@startuml Sequence_AppelVapi
+skinparam shadowing false
+skinparam backgroundColor #FAFAFA
+skinparam sequence {
+  ArrowColor #185FA5
+  LifeLineBorderColor #185FA5
+  ParticipantBackgroundColor #E6F1FB
+  ParticipantBorderColor #185FA5
+  ParticipantFontSize 12
+  ActorBackgroundColor #D6E4F0
+  ActorBorderColor #1A3C5E
+  BoxBackgroundColor #F5F7FA
+  BoxBorderColor #E0E6ED
+  NoteBackgroundColor #FFF3CD
+  NoteBorderColor #BA7517
+}
+
+title RdvMindset — Séquence : Appel Vapi → n8n → Spring Boot
+
+actor "Client Final" as CLIENT
+participant "Vapi\n(Agent Vocal)" as VAPI
+participant "n8n\n(Orchestrateur)" as N8N
+participant "Message Queue\n(Redis)" as QUEUE
+participant "Spring Boot\n(RdvService)" as SPRING
+participant "Google Calendar\nAPI" as GCAL
+database "PostgreSQL" as DB
+
+== Phase 1 : Dialogue IA ==
+
+CLIENT -> VAPI : Appel téléphonique
+activate VAPI
+
+VAPI -> CLIENT : "Bonjour, comment puis-je vous aider ?"
+CLIENT -> VAPI : "Je voudrais un RDV jeudi matin"
+
+VAPI -> VAPI : NLU — extraction entités\n(date, motif, préférences)
+note right of VAPI
+  Entités extraites :
+  - date : jeudi prochain
+  - heure : matin
+  - motif : consultation
+end note
+
+== Phase 2 : Vérification des disponibilités (async) ==
+
+VAPI -> N8N : POST /webhook/vapi\n{callId, entrepriseId, infos_client}
+activate N8N
+
+N8N -> N8N : Parse payload\nConstruit message VERIFY_DISPO
+
+N8N -> QUEUE : PUBLISH "rdv:verify"\n{entrepriseId, date, duree}
+activate QUEUE
+deactivate N8N
+
+note over N8N, QUEUE
+  n8n publie et n'attend PAS
+  → non bloquant
+end note
+
+QUEUE -> SPRING : Consume "rdv:verify"
+activate SPRING
+
+SPRING -> DB : SELECT disponibilites\nWHERE entreprise_id = ?
+DB --> SPRING : créneaux configurés
+
+SPRING -> GCAL : FreeBusy API\n(créneaux déjà pris)
+activate GCAL
+GCAL --> SPRING : busy slots
+deactivate GCAL
+
+SPRING -> SPRING : Calcule créneaux libres
+SPRING -> QUEUE : PUBLISH "rdv:dispo_result"\n{slots: ["09:00","10:00","11:00"]}
+deactivate SPRING
+
+QUEUE -> N8N : Consume "rdv:dispo_result"
+activate N8N
+
+== Phase 3 : Confirmation ==
+
+N8N -> VAPI : POST /vapi/call/{callId}/say\n"Voici les créneaux disponibles..."
+VAPI -> CLIENT : Propose les créneaux vocalement
+
+CLIENT -> VAPI : "Je prends 10h00"
+VAPI -> N8N : webhook confirmation\n{slot: "10:00"}
+
+N8N -> QUEUE : PUBLISH "rdv:create"\n{entrepriseId, clientId, dateHeure}
+deactivate N8N
+
+QUEUE -> SPRING : Consume "rdv:create"
+activate SPRING
+
+== Phase 4 : Création et notifications ==
+
+SPRING -> DB : INSERT INTO rendez_vous\n(id, date_heure, statut='CONFIRME')
+DB --> SPRING : RDV créé ✓
+
+SPRING -> GCAL : createEvent(titre, dateHeure, duree)
+GCAL --> SPRING : eventId
+
+SPRING -> QUEUE : PUBLISH "rdv:created"\n{rdvId, clientEmail, details}
+SPRING -> SPRING : NotificationService
+SPRING -> CLIENT : Email de confirmation (async)
+SPRING -> VAPI : callback → confirmer vocalement
+deactivate SPRING
+
+VAPI -> CLIENT : "Votre RDV du jeudi à 10h est confirmé !"
+deactivate VAPI
+
+note over SPRING
+  Dashboard entreprise mis à jour
+  via WebSocket (STOMP)
+end note
+
+@enduml

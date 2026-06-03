@@ -1,0 +1,237 @@
+@startuml Classes_SpringBoot
+skinparam shadowing false
+skinparam backgroundColor #FAFAFA
+skinparam class {
+  BackgroundColor #E6F1FB
+  BorderColor #185FA5
+  ArrowColor #185FA5
+  HeaderBackgroundColor #1A3C5E
+  HeaderFontColor #FFFFFF
+  FontSize 12
+}
+skinparam stereotypeFontColor #185FA5
+skinparam stereotypeFontSize 11
+
+title RdvMindset — Diagramme de Classes (Backend Spring Boot)
+
+' ── Entités JPA ──────────────────────────────────
+class Entreprise {
+  - UUID id
+  - String nom
+  - String secteur
+  - String email
+  - String telephone
+  - PlanAbonnement plan
+  - LocalDateTime createdAt
+  - boolean actif
+  --
+  + getAgents() : List<Agent>
+  + getDisponibilites() : List<Disponibilite>
+}
+
+class Agent {
+  - UUID id
+  - String nom
+  - TypeAgent type
+  - String vapiAssistantId
+  - String botpresseBotId
+  - String systemPrompt
+  - String numeroTelephone
+  - boolean actif
+  --
+  + getConfiguration() : AgentConfig
+}
+
+enum TypeAgent {
+  VOCAL
+  CHATBOT
+}
+
+class AgentConfig {
+  - UUID id
+  - String ton
+  - String faq
+  - String tarifs
+  - int dureeRdvMinutes
+  - String secteurModele
+}
+
+class Disponibilite {
+  - UUID id
+  - DayOfWeek jour
+  - LocalTime heureDebut
+  - LocalTime heureFin
+  - int capaciteMax
+}
+
+class Client {
+  - UUID id
+  - String prenom
+  - String nom
+  - String email
+  - String telephone
+  - LocalDateTime createdAt
+}
+
+class RendezVous {
+  - UUID id
+  - LocalDateTime dateHeure
+  - int dureeMinutes
+  - StatutRdv statut
+  - String motif
+  - String notes
+  - LocalDateTime createdAt
+  --
+  + confirmer() : void
+  + annuler() : void
+  + reporter(LocalDateTime) : void
+}
+
+enum StatutRdv {
+  EN_ATTENTE
+  CONFIRME
+  ANNULE
+  COMPLETE
+  NO_SHOW
+}
+
+class CallLog {
+  - UUID id
+  - String vapiCallId
+  - LocalDateTime dateAppel
+  - int dureeSecondes
+  - String transcription
+  - StatutAppel statut
+}
+
+class ChatLog {
+  - UUID id
+  - String botpressSessionId
+  - LocalDateTime dateDebut
+  - String messagesJson
+  - StatutChat statut
+}
+
+class Notification {
+  - UUID id
+  - CanalNotif canal
+  - String destinataire
+  - String contenu
+  - StatutNotif statut
+  - LocalDateTime envoyeAt
+}
+
+enum CanalNotif {
+  EMAIL
+  SMS
+  WEBHOOK
+}
+
+class CalendarToken {
+  - UUID id
+  - String provider
+  - String accessTokenChiffre
+  - String refreshTokenChiffre
+  - LocalDateTime expiresAt
+}
+
+' ── Services Spring Boot ──────────────────────────
+class RdvService <<Service>> {
+  - RdvRepository rdvRepo
+  - CalendarService calendarSvc
+  - DisponibiliteRepository dispoRepo
+  - NotificationService notifSvc
+  --
+  + creerRdv(RdvRequest) : RdvResponse
+  + annulerRdv(UUID) : void
+  + verifierDisponibilites(UUID, LocalDate) : List<TimeSlot>
+  + traiterMessageQueue(RdvMessage) : void
+}
+
+class CalendarService <<Service>> {
+  - CalendarTokenRepository tokenRepo
+  --
+  + getSlotsLibres(UUID, LocalDate) : List<TimeSlot>
+  + creerEvenement(RendezVous) : String
+  + supprimerEvenement(String) : void
+  + rafraichirToken(UUID) : void
+}
+
+class AgentService <<Service>> {
+  - VapiClient vapiClient
+  - BotpressClient botpressClient
+  --
+  + creerAgentVapi(Entreprise) : Agent
+  + creerAgentBotpress(Entreprise) : Agent
+  + mettreAJourPrompt(UUID, String) : void
+  + genererNumeroTelephone(UUID) : String
+}
+
+class WebhookService <<Service>> {
+  - MessageQueueService queueSvc
+  --
+  + traiterWebhookVapi(VapiPayload) : void
+  + traiterWebhookBotpress(BotpressPayload) : void
+  + validerSignatureHmac(String, String) : boolean
+}
+
+class NotificationService <<Service>> {
+  - JavaMailSender mailSender
+  - TwilioClient twilioClient
+  - SimpMessagingTemplate wsTemplate
+  --
+  + envoyerEmail(String, String, String) : void
+  + envoyerSms(String, String) : void
+  + pousserWebSocket(String, Object) : void
+}
+
+class MessageQueueService <<Service>> {
+  - RedisTemplate redisTemplate
+  --
+  + publier(String, Object) : void
+  + consommer(String) : Object
+}
+
+' ── Controllers ──────────────────────────────────
+class RdvController <<RestController>> {
+  + getAllRdv(Pageable) : Page<RdvResponse>
+  + createRdv(RdvRequest) : RdvResponse
+  + cancelRdv(UUID) : void
+  + getDisponibilites(UUID, LocalDate) : List<TimeSlot>
+}
+
+class WebhookController <<RestController>> {
+  + receiveVapi(VapiPayload, String) : void
+  + receiveBotpress(BotpressPayload, String) : void
+}
+
+class EntrepriseController <<RestController>> {
+  + getEntreprise(UUID) : EntrepriseResponse
+  + updateEntreprise(UUID, EntrepriseRequest) : EntrepriseResponse
+  + getStats(UUID) : StatsResponse
+}
+
+' ── Relations entre entités ────────────────────────
+Entreprise "1" *-- "many" Agent : possède
+Entreprise "1" *-- "many" Disponibilite : définit
+Entreprise "1" *-- "1" CalendarToken : synchronise
+Agent "1" *-- "1" AgentConfig : configure
+Agent "1" -- TypeAgent
+RendezVous "many" --> "1" Entreprise : appartient à
+RendezVous "many" --> "1" Client : concerne
+RendezVous "1" *-- "0..1" CallLog : génère
+RendezVous "1" *-- "0..1" ChatLog : génère
+RendezVous "1" *-- "many" Notification : déclenche
+RendezVous -- StatutRdv
+Notification -- CanalNotif
+
+' ── Relations services/controllers ────────────────
+RdvController --> RdvService : utilise
+WebhookController --> WebhookService : utilise
+EntrepriseController --> AgentService : utilise
+RdvService --> CalendarService : délègue
+RdvService --> NotificationService : délègue
+WebhookService --> MessageQueueService : publie
+RdvService --> MessageQueueService : consomme
+
+@enduml

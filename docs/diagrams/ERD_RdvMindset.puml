@@ -1,0 +1,154 @@
+@startuml ERD_RdvMindset
+skinparam shadowing false
+skinparam backgroundColor #FAFAFA
+skinparam entity {
+  BackgroundColor #E6F1FB
+  BorderColor #185FA5
+  FontSize 12
+  HeaderBackgroundColor #1A3C5E
+  HeaderFontColor #FFFFFF
+}
+skinparam ArrowColor #185FA5
+
+title RdvMindset — Modèle Entité-Relation
+
+entity "ENTREPRISES" as ENT {
+  * id : UUID <<PK>>
+  --
+  nom : VARCHAR(255)
+  secteur : VARCHAR(100)
+  email : VARCHAR(255)
+  telephone : VARCHAR(20)
+  plan_abonnement : ENUM
+  stripe_customer_id : VARCHAR
+  actif : BOOLEAN
+  created_at : TIMESTAMP
+}
+
+entity "AGENTS" as AGT {
+  * id : UUID <<PK>>
+  --
+  # entreprise_id : UUID <<FK>>
+  nom : VARCHAR(255)
+  type : ENUM(VOCAL,CHATBOT)
+  vapi_assistant_id : VARCHAR
+  botpress_bot_id : VARCHAR
+  numero_telephone : VARCHAR(20)
+  system_prompt : TEXT
+  actif : BOOLEAN
+}
+
+entity "AGENT_CONFIGS" as CFG {
+  * id : UUID <<PK>>
+  --
+  # agent_id : UUID <<FK>>
+  ton : VARCHAR(50)
+  faq : TEXT
+  tarifs : TEXT
+  duree_rdv_minutes : INT
+  secteur_modele : VARCHAR(100)
+  updated_at : TIMESTAMP
+}
+
+entity "DISPONIBILITES" as DISPO {
+  * id : UUID <<PK>>
+  --
+  # entreprise_id : UUID <<FK>>
+  jour_semaine : ENUM
+  heure_debut : TIME
+  heure_fin : TIME
+  capacite_max : INT
+}
+
+entity "CALENDAR_TOKENS" as CAL {
+  * id : UUID <<PK>>
+  --
+  # entreprise_id : UUID <<FK>>
+  provider : ENUM(GOOGLE,OUTLOOK)
+  access_token_chiffre : TEXT
+  refresh_token_chiffre : TEXT
+  expires_at : TIMESTAMP
+}
+
+entity "CLIENTS" as CLI {
+  * id : UUID <<PK>>
+  --
+  prenom : VARCHAR(100)
+  nom : VARCHAR(100)
+  email : VARCHAR(255)
+  telephone : VARCHAR(20)
+  created_at : TIMESTAMP
+}
+
+entity "RENDEZ_VOUS" as RDV {
+  * id : UUID <<PK>>
+  --
+  # entreprise_id : UUID <<FK>>
+  # client_id : UUID <<FK>>
+  # agent_id : UUID <<FK>>
+  date_heure : TIMESTAMP
+  duree_minutes : INT
+  statut : ENUM
+  motif : VARCHAR(255)
+  google_event_id : VARCHAR
+  created_at : TIMESTAMP
+}
+
+entity "CALL_LOGS" as CALL {
+  * id : UUID <<PK>>
+  --
+  # rdv_id : UUID <<FK>>
+  vapi_call_id : VARCHAR
+  date_appel : TIMESTAMP
+  duree_secondes : INT
+  transcription : TEXT
+  statut : ENUM
+}
+
+entity "CHAT_LOGS" as CHAT {
+  * id : UUID <<PK>>
+  --
+  # rdv_id : UUID <<FK>>
+  botpress_session_id : VARCHAR
+  date_debut : TIMESTAMP
+  messages_json : JSONB
+  statut : ENUM
+}
+
+entity "NOTIFICATIONS" as NOTIF {
+  * id : UUID <<PK>>
+  --
+  # rdv_id : UUID <<FK>>
+  canal : ENUM(EMAIL,SMS)
+  destinataire : VARCHAR(255)
+  type_notif : ENUM
+  statut : ENUM(ENVOYE,ECHEC)
+  envoye_at : TIMESTAMP
+}
+
+entity "AUDIT_TRAIL" as AUDIT {
+  * id : UUID <<PK>>
+  --
+  entity_type : VARCHAR(50)
+  entity_id : UUID
+  action : VARCHAR(50)
+  user_id : UUID
+  details_json : JSONB
+  created_at : TIMESTAMP
+}
+
+' ── Relations ─────────────────────────────────────
+ENT ||--o{ AGT : "possède"
+AGT ||--|| CFG : "configure"
+ENT ||--o{ DISPO : "définit"
+ENT ||--o| CAL : "synchronise"
+
+RDV }o--|| ENT : "appartient à"
+RDV }o--|| CLI : "concerne"
+RDV }o--|| AGT : "géré par"
+
+RDV ||--o| CALL : "génère"
+RDV ||--o| CHAT : "génère"
+RDV ||--o{ NOTIF : "déclenche"
+
+@enduml

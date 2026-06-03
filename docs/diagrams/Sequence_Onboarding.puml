@@ -1,0 +1,84 @@
+@startuml Sequence_Onboarding
+skinparam shadowing false
+skinparam backgroundColor #FAFAFA
+skinparam sequence {
+  ArrowColor #185FA5
+  LifeLineBorderColor #185FA5
+  ParticipantBackgroundColor #E6F1FB
+  ParticipantBorderColor #185FA5
+  ParticipantFontSize 12
+  ActorBorderColor #1A3C5E
+  NoteBackgroundColor #D4EDDA
+  NoteBorderColor #1E6B3C
+}
+
+title RdvMindset — Séquence : Onboarding Entreprise
+
+actor "Entreprise" as ENT
+participant "Frontend\nReact" as FRONT
+participant "Spring Boot\n(API)" as SPRING
+participant "Vapi API" as VAPI
+participant "Botpress API" as BOT
+participant "Google OAuth2" as GOOGLE
+database "PostgreSQL" as DB
+
+== Étape 1 : Inscription ==
+
+ENT -> FRONT : Formulaire d'inscription
+FRONT -> SPRING : POST /api/v1/auth/register\n{email, motDePasse, nomEntreprise}
+SPRING -> DB : INSERT entreprise + user
+SPRING -> SPRING : Envoie email vérification
+SPRING --> FRONT : 201 Created + JWT
+FRONT -> ENT : Dashboard (étape 1/5)
+
+== Étape 2 : Profilage ==
+
+ENT -> FRONT : Remplit profil\n(secteur, prestations, horaires)
+FRONT -> SPRING : PUT /api/v1/entreprise/{id}/profil
+SPRING -> DB : UPDATE entreprise SET secteur, horaires...
+SPRING --> FRONT : 200 OK
+FRONT -> ENT : Étape 2/5 ✓
+
+== Étape 3 : Connexion calendrier ==
+
+ENT -> FRONT : Clique "Connecter Google Calendar"
+FRONT -> SPRING : GET /auth/google/calendar?entrepriseId={id}
+SPRING -> GOOGLE : Redirect OAuth2\n(authorization URL)
+GOOGLE -> ENT : Page consentement Google
+ENT -> GOOGLE : Autorise l'accès
+GOOGLE -> SPRING : Callback + code
+SPRING -> GOOGLE : Échange code → tokens
+GOOGLE --> SPRING : {access_token, refresh_token}
+SPRING -> DB : INSERT calendar_token (chiffré)
+SPRING -> FRONT : Redirect dashboard?calendar=connected
+FRONT -> ENT : Étape 3/5 ✓
+
+== Étape 4 : Génération des agents IA ==
+
+ENT -> FRONT : Clique "Générer mes agents"
+FRONT -> SPRING : POST /api/v1/agent/generate\n{entrepriseId}
+
+SPRING -> DB : SELECT modele_sectoriel WHERE secteur = ?
+DB --> SPRING : template prompt
+
+SPRING -> VAPI : POST /assistant\n{systemPrompt, voix, webhookUrl}
+VAPI --> SPRING : {assistantId, phoneNumber}
+
+SPRING -> BOT : POST /api/bots\n{name, systemPrompt}
+BOT --> SPRING : {botId, integrationScript}
+
+SPRING -> DB : INSERT agent (vapiId, botpressId, numero)
+SPRING --> FRONT : {numeroTelephone, scriptIntegration}
+FRONT -> ENT : Étape 4/5 ✓\nNuméro + script fournis
+
+== Étape 5 : Test et mise en production ==
+
+ENT -> FRONT : Clique "Tester"
+FRONT -> ENT : Affiche numéro + widget preview
+ENT -> SPRING : POST /api/v1/agent/{id}/activate
+SPRING -> DB : UPDATE agent SET actif = true
+SPRING -> VAPI : Activate assistant
+SPRING --> FRONT : 200 OK — En production
+FRONT -> ENT : 🟢 Étape 5/5 — Vos agents sont actifs !
+
+@enduml
