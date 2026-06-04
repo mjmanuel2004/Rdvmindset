@@ -21,8 +21,13 @@ public class Company {
     @Column(nullable = false)
     private String name;
 
-    @Column(nullable = false)
-    private String industry;
+    @ManyToMany
+    @JoinTable(
+        name = "company_industries",
+        joinColumns = @JoinColumn(name = "company_id"),
+        inverseJoinColumns = @JoinColumn(name = "industry_id")
+    )
+    private List<Industry> industries;
 
     @Column(nullable = false, unique = true)
     private String email;
