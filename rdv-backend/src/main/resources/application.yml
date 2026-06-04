@@ -37,6 +37,13 @@ spring:
           starttls:
             enable: true
 
+  # ── Security & OAuth2 (Keycloak) ───────────
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:9090/realms/rdvmindset}
+
 # ── Server ─────────────────────────────────
 server:
   port: ${SERVER_PORT:8080}
@@ -51,10 +58,6 @@ management:
     health:
       show-details: when-authorized
 
-# ── JWT ────────────────────────────────────
 app:
-  jwt:
-    secret: ${JWT_SECRET:RdvMindsetSuperSecretKeyPourJWT2026DevEnvironnement}
-    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
   encryption:
     key: ${ENCRYPTION_KEY:CleSecreteSuperLonguePourAES256!}
