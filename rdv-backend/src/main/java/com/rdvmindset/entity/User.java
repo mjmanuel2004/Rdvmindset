@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
 import java.util.UUID;
+import com.rdvmindset.entity.enums.UserRole;
 
 @Entity
 @Table(name = "users")
@@ -24,11 +25,12 @@ public class User {
     @Column(nullable = false, unique = true)
     private String email;
 
-    @Column(nullable = false)
-    private String password;
+    @Column(name = "keycloak_id", unique = true)
+    private UUID keycloakId;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private String role;
+    private UserRole role;
 
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
