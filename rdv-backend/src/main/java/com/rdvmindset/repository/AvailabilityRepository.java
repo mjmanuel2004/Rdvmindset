@@ -10,4 +10,5 @@ import java.util.UUID;
 @Repository
 public interface AvailabilityRepository extends JpaRepository<Availability, UUID> {
     List<Availability> findByCompanyId(UUID companyId);
+    void deleteByCompanyId(UUID companyId);
 }
