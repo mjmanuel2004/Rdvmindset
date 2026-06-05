@@ -61,3 +61,9 @@ management:
 app:
   encryption:
     key: ${ENCRYPTION_KEY:CleSecreteSuperLonguePourAES256!}
+  keycloak:
+    server-url: ${KEYCLOAK_SERVER_URL:http://localhost:9090}
+    realm: ${KEYCLOAK_REALM:rdvmindset}
+    admin-client-id: ${KEYCLOAK_ADMIN_CLIENT_ID:admin-cli}
+    admin-username: ${KEYCLOAK_ADMIN_USERNAME:admin}
+    admin-password: ${KEYCLOAK_ADMIN_PASSWORD:admin}

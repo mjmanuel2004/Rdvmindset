@@ -19,7 +19,7 @@ Ce guide couvre la mise en place de l'environnement de développement, la créat
 * **Docker Desktop** : Requis pour faire tourner l'environnement de persistance local.
 
 ### 2. Conteneurs Locaux (`docker-compose.local.yml`)
-Placez ce fichier à la racine du projet pour orchestrer la base de données PostgreSQL, le cache/broker Redis et l'orchestrateur n8n en local.
+Placez ce fichier à la racine du projet pour orchestrer la base de données PostgreSQL, le cache/broker Redis, l'orchestrateur n8n et Keycloak.
 
 ```yaml
 version: '3.8'
@@ -29,13 +29,19 @@ services:
     image: postgres:16-alpine
     container_name: rdv_postgres
     ports:
-      - "5432:5432"
+      - "5433:5432"
     environment:
       POSTGRES_DB: rdvmindset
       POSTGRES_USER: dev_user
       POSTGRES_PASSWORD: dev_password_123
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init-keycloak-schema.sql:/docker-entrypoint-initdb.d/init-keycloak-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dev_user -d rdvmindset"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
@@ -45,19 +51,29 @@ services:
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   n8n:
     image: docker.n8n.io/n8nio/n8n:latest
     container_name: rdv_n8n
     ports:
-      - "5678:5678"
+      - "${N8N_PORT:-5678}:5678"
     environment:
-      - N8N_HOST=localhost
+      - N8N_HOST=${N8N_HOST:-localhost}
       - N8N_PORT=5678
-      - N8N_PROTOCOL=http
-      - WEBHOOK_URL=http://localhost:5678/
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
+      - WEBHOOK_URL=http://localhost:${N8N_PORT:-5678}/
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_SECURE_COOKIE=false
     volumes:
       - n8n_data:/home/node/.n8n
+    depends_on:
+      redis:
+        condition: service_healthy
 
   keycloak:
     image: quay.io/keycloak/keycloak:24.0
@@ -74,6 +90,15 @@ services:
       KC_HEALTH_ENABLED: "true"
     ports:
       - "9090:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
 volumes:
   postgres_data:
@@ -105,25 +130,24 @@ rdvmindset/
 ### 1. Structure des Migrations Flyway (`db/migration/`)
 Chaque étape de la modélisation correspond à un fichier SQL versionné.
 
-#### `V1__init.sql` (Structure de base et Auth)
+#### `V1__init_core.sql` (Structure de base et Auth)
 ```sql
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
-CREATE TABLE entreprises (
+CREATE TABLE companies (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    nom VARCHAR(255) NOT NULL,
-    secteur VARCHAR(100) NOT NULL,
+    name VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
-    telephone VARCHAR(20),
-    plan_abonnement VARCHAR(50) DEFAULT 'STANDARD',
+    phone VARCHAR(20),
+    subscription_plan VARCHAR(50) DEFAULT 'STANDARD',
     stripe_customer_id VARCHAR(255),
-    actif BOOLEAN DEFAULT TRUE,
+    active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    entreprise_id UUID REFERENCES entreprises(id) ON DELETE CASCADE,
+    company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
     email VARCHAR(255) NOT NULL UNIQUE,
     keycloak_id UUID UNIQUE,
     role VARCHAR(50) NOT NULL,
@@ -131,109 +155,24 @@ CREATE TABLE users (
 );
 ```
 
-#### `V2__agents.sql` (Configuration Agents IA)
+#### `V5__add_industries.sql` (Secteurs d'activité Many-to-Many)
 ```sql
-CREATE TABLE agents (
+CREATE TABLE industries (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    entreprise_id UUID REFERENCES entreprises(id) ON DELETE CASCADE,
-    nom VARCHAR(255) NOT NULL,
-    type VARCHAR(50) NOT NULL, -- VOCAL, CHATBOT
-    vapi_assistant_id VARCHAR(255),
-    botpress_bot_id VARCHAR(255),
-    numero_telephone VARCHAR(20),
-    system_prompt TEXT,
-    actif BOOLEAN DEFAULT TRUE
+    name VARCHAR(100) NOT NULL UNIQUE
 );
 
-CREATE TABLE agent_configs (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    agent_id UUID UNIQUE REFERENCES agents(id) ON DELETE CASCADE,
-    ton VARCHAR(50) DEFAULT 'PROFESSIONNEL',
-    faq TEXT,
-    tarifs TEXT,
-    duree_rdv_minutes INT DEFAULT 30,
-    secteur_modele VARCHAR(100),
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE company_industries (
+    company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
+    industry_id UUID REFERENCES industries(id) ON DELETE CASCADE,
+    PRIMARY KEY (company_id, industry_id)
 );
 ```
 
-#### `V3__rdv.sql` (Modélisation des Rendez-vous & Calendrier)
-```sql
-CREATE TABLE clients (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    prenom VARCHAR(100) NOT NULL,
-    nom VARCHAR(100) NOT NULL,
-    email VARCHAR(255) UNIQUE,
-    telephone VARCHAR(20) UNIQUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+#### `V2__agents.sql` à `V4__logs.sql` (Exemples pour les Agents, RDVs, Logs)
+Ces scripts créent les tables `agents`, `agent_configs`, `clients`, `availabilities`, `appointments`, `calendar_tokens`, `call_logs`, `chat_logs`, et `notifications`.
 
-CREATE TABLE disponibilites (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    entreprise_id UUID REFERENCES entreprises(id) ON DELETE CASCADE,
-    jour_semaine INT NOT NULL, -- 1=Lundi, ..., 7=Dimanche
-    heure_debut TIME NOT NULL,
-    heure_fin TIME NOT NULL,
-    capacite_max INT DEFAULT 1
-);
-
-CREATE TABLE calendar_tokens (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    entreprise_id UUID UNIQUE REFERENCES entreprises(id) ON DELETE CASCADE,
-    provider VARCHAR(50) NOT NULL, -- GOOGLE, OUTLOOK
-    access_token_chiffre TEXT NOT NULL,
-    refresh_token_chiffre TEXT NOT NULL,
-    expires_at TIMESTAMP NOT NULL
-);
-
-CREATE TABLE rendez_vous (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    entreprise_id UUID REFERENCES entreprises(id) ON DELETE CASCADE,
-    client_id UUID REFERENCES clients(id),
-    agent_id UUID REFERENCES agents(id),
-    date_heure TIMESTAMP NOT NULL,
-    duree_minutes INT NOT NULL,
-    statut VARCHAR(50) DEFAULT 'EN_ATTENTE',
-    motif VARCHAR(255),
-    notes TEXT,
-    google_event_id VARCHAR(255),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-#### `V4__logs.sql` (Logs des canaux & Audit)
-```sql
-CREATE TABLE call_logs (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    rdv_id UUID REFERENCES rendez_vous(id) ON DELETE SET NULL,
-    vapi_call_id VARCHAR(255) NOT NULL,
-    date_appel TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    duree_secondes INT,
-    transcription TEXT,
-    statut VARCHAR(50)
-);
-
-CREATE TABLE chat_logs (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    rdv_id UUID REFERENCES rendez_vous(id) ON DELETE SET NULL,
-    botpress_session_id VARCHAR(255) NOT NULL,
-    date_debut TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    messages_json JSONB,
-    statut VARCHAR(50)
-);
-
-CREATE TABLE notifications (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    rdv_id UUID REFERENCES rendez_vous(id) ON DELETE CASCADE,
-    canal VARCHAR(50) NOT NULL, -- EMAIL, SMS
-    destinataire VARCHAR(255) NOT NULL,
-    contenu TEXT NOT NULL,
-    statut VARCHAR(50) DEFAULT 'EN_COURS',
-    envoye_at TIMESTAMP
-);
-```
-
-### 2. Exemple de Mapping JPA Bidirectionnel (`Entreprise.java`)
+### 2. Exemple de Mapping JPA Bidirectionnel (`Company.java`)
 ```java
 package com.rdvmindset.entity;
 
@@ -243,38 +182,32 @@ import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Table(name = "entreprises")
+@Table(name = "companies")
 @Getter @Setter
 @NoArgsConstructor @AllArgsConstructor
-public class Entreprise {
+public class Company {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
     @Column(nullable = false)
-    private String nom;
+    private String name;
 
-    @Column(nullable = false)
-    private String secteur;
+    @ManyToMany
+    @JoinTable(
+        name = "company_industries",
+        joinColumns = @JoinColumn(name = "company_id"),
+        inverseJoinColumns = @JoinColumn(name = "industry_id")
+    )
+    private List<Industry> industries;
 
     @Column(nullable = false, unique = true)
     private String email;
 
-    private String telephone;
+    @OneToMany(mappedBy = "company", cascade = CascadeType.ALL)
+    private List<User> users;
 
-    @Column(name = "plan_abonnement")
-    private String planAbonnement;
-
-    @Column(name = "stripe_customer_id")
-    private String stripeCustomerId;
-
-    private boolean actif = true;
-
-    @OneToMany(mappedBy = "entreprise", cascade = CascadeType.ALL)
-    private List<Agent> agents;
-
-    @OneToMany(mappedBy = "entreprise", cascade = CascadeType.ALL)
-    private List<Disponibilite> disponibilites;
+    // ... autres relations (agents, appointments, etc.)
 }
 ```
 
@@ -315,8 +248,6 @@ public class SecurityConfig {
 
         return http.build();
     }
-    
-    // Convertisseurs CORS et JWT/Roles définis ici...
 }
 ```
 
@@ -328,46 +259,31 @@ package com.rdvmindset.security;
 
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
 import java.util.Base64;
 
 @Converter
+@Component
 public class EncryptionConverter implements AttributeConverter<String, String> {
     private static final String ALGORITHM = "AES/ECB/PKCS5Padding";
-    private static final byte[] KEY = "CleSecreteSuperLonguePourAES256!".getBytes(); // Stocker dans .env
+    private static byte[] KEY;
+
+    @Value("${app.encryption.key:CleSecreteSuperLonguePourAES256!}")
+    public void setKey(String key) {
+        KEY = key.getBytes();
+    }
 
     @Override
     public String convertToDatabaseColumn(String attribute) {
-        if (attribute == null) return null;
-        try {
-            SecretKeySpec secretKey = new SecretKeySpec(KEY, "AES");
-            Cipher cipher = Cipher.getInstance(ALGORITHM);
-            cipher.init(Cipher.ENCRYPT_MODE, secretKey);
-            return Base64.getEncoder().encodeToString(cipher.doFinal(attribute.getBytes()));
-        } catch (Exception e) {
-            throw new RuntimeException("Erreur lors du chiffrement du token", e);
-        }
+        // Logique de chiffrement
     }
 
     @Override
     public String convertToEntityAttribute(String dbData) {
-        if (dbData == null) return null;
-        try {
-            SecretKeySpec secretKey = new SecretKeySpec(KEY, "AES");
-            Cipher cipher = Cipher.getInstance(ALGORITHM);
-            cipher.init(Cipher.DECRYPT_MODE, secretKey);
-            return new String(cipher.doFinal(Base64.getDecoder().decode(dbData)));
-        } catch (Exception e) {
-            throw new RuntimeException("Erreur lors du déchiffrement du token", e);
-        }
+        // Logique de déchiffrement
     }
 }
-```
-
-Dans l'entité `CalendarToken`, appliquez l'annotation :
-```java
-@Convert(converter = EncryptionConverter.class)
-@Column(name = "access_token_chiffre", nullable = false)
-private String accessToken;
 ```

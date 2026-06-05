@@ -2,5 +2,5 @@ package com.rdvmindset.config;
 
 /**
  * Package de configuration Spring Boot.
- * Contient : WebSocketConfig, SecurityConfig, RedisConfig, CorsConfig.
+ * Contient pour le moment : (Les configurations de sécurité sont dans .security)
  */
