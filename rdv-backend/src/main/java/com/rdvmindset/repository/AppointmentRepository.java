@@ -11,4 +11,7 @@ import java.util.UUID;
 public interface AppointmentRepository extends JpaRepository<Appointment, UUID> {
     List<Appointment> findByCompanyId(UUID companyId);
     List<Appointment> findByClientId(UUID clientId);
+    
+    // Utilisé pour vérifier les disponibilités d'une journée
+    List<Appointment> findByCompanyIdAndDateTimeBetween(UUID companyId, java.time.LocalDateTime start, java.time.LocalDateTime end);
 }

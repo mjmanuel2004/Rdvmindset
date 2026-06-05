@@ -97,3 +97,34 @@ curl -X PUT http://localhost:8080/api/v1/agents/$AGENT_ID/config \
     "appointmentDurationMinutes": 20
   }'
 echo -e "\n\n"
+
+# 7. Vérification des créneaux disponibles
+echo "--- 7. Recherche de créneaux disponibles ---"
+# Lundi est le 1, Mardi est le 2. Prenons une date future qui tombe un Lundi, par exemple 2026-06-08
+DATE="2026-06-08"
+curl -s -X GET "http://localhost:8080/api/v1/appointments/available-slots?date=$DATE&duration=30" \
+  -H "Authorization: Bearer $TOKEN"
+echo -e "\n\n"
+
+# 8. Prise de rendez-vous avec création du client
+echo "--- 8. Prise de rendez-vous ---"
+curl -s -X POST http://localhost:8080/api/v1/appointments \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "clientFirstName": "John",
+    "clientLastName": "Doe",
+    "clientPhone": "+33600112233",
+    "clientEmail": "john.doe@test.com",
+    "dateTime": "'$DATE'T09:00:00",
+    "durationMinutes": 30,
+    "reason": "Consultation de suivi",
+    "agentId": "'$AGENT_ID'"
+  }'
+echo -e "\n\n"
+
+# 9. Re-Vérification des créneaux (09:00 devrait avoir disparu si maxCapacity=1 ou si on a atteint maxCapacity)
+echo "--- 9. Recherche de créneaux disponibles (Après RDV) ---"
+curl -s -X GET "http://localhost:8080/api/v1/appointments/available-slots?date=$DATE&duration=30" \
+  -H "Authorization: Bearer $TOKEN"
+echo -e "\n\n"
