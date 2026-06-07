@@ -14,4 +14,11 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
     
     // Utilisé pour vérifier les disponibilités d'une journée
     List<Appointment> findByCompanyIdAndDateTimeBetween(UUID companyId, java.time.LocalDateTime start, java.time.LocalDateTime end);
+
+    // Statistiques analytiques
+    long countByCompanyId(UUID companyId);
+    long countByCompanyIdAndStatus(UUID companyId, String status);
+    
+    @org.springframework.data.jpa.repository.Query("SELECT COUNT(DISTINCT a.client.id) FROM Appointment a WHERE a.company.id = :companyId")
+    long countDistinctClientsByCompanyId(@org.springframework.data.repository.query.Param("companyId") UUID companyId);
 }
