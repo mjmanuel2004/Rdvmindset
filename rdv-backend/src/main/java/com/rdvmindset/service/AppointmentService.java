@@ -111,6 +111,18 @@ public class AppointmentService {
     }
 
     /**
+     * Récupère les rendez-vous à venir pour une entreprise (Agenda).
+     */
+    public List<AppointmentResponse> getUpcomingAppointments(UUID companyId) {
+        // On récupère les RDV à partir du début de la journée courante pour voir ceux d'aujourd'hui
+        LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
+        return appointmentRepository.findByCompanyIdAndDateTimeAfterOrderByDateTimeAsc(companyId, startOfToday)
+                .stream()
+                .map(AppointmentResponse::fromEntity)
+                .collect(Collectors.toList());
+    }
+
+    /**
      * Crée un nouveau rendez-vous via l'API standard (utilise le JWT de l'utilisateur connecté).
      */
     @Transactional

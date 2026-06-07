@@ -15,6 +15,9 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
     // Utilisé pour vérifier les disponibilités d'une journée
     List<Appointment> findByCompanyIdAndDateTimeBetween(UUID companyId, java.time.LocalDateTime start, java.time.LocalDateTime end);
 
+    // Utilisé pour récupérer l'agenda à venir
+    List<Appointment> findByCompanyIdAndDateTimeAfterOrderByDateTimeAsc(UUID companyId, java.time.LocalDateTime date);
+
     // Statistiques analytiques
     long countByCompanyId(UUID companyId);
     long countByCompanyIdAndStatus(UUID companyId, String status);

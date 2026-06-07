@@ -36,6 +36,19 @@ public class AppointmentController {
     }
 
     /**
+     * Récupère l'agenda (Rendez-vous à venir).
+     */
+    @GetMapping
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'MANAGER', 'AGENT')")
+    public ResponseEntity<List<AppointmentResponse>> getUpcomingAppointments() {
+        Company company = userService.getCurrentUser().getCompany();
+        if (company == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.ok(appointmentService.getUpcomingAppointments(company.getId()));
+    }
+
+    /**
      * Récupère les créneaux horaires disponibles pour une date donnée.
      * Accessible à tous les employés de l'entreprise.
      */
