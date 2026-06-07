@@ -1,4 +1,6 @@
-import Link from "next/link";
+"use client";
+
+import { signIn } from "next-auth/react";
 
 export default function LoginPage() {
   return (
@@ -10,52 +12,22 @@ export default function LoginPage() {
           <p style={{ fontSize: '0.9rem' }}>Accédez à votre espace sécurisé RdvMindset</p>
         </div>
 
-        <form style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', textAlign: 'center' }}>
           
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <label style={{ fontSize: '0.9rem', fontWeight: '500' }}>Email Professionnel</label>
-            <input 
-              type="email" 
-              placeholder="dr.dupont@clinique.com"
-              style={{
-                background: 'rgba(0, 0, 0, 0.2)',
-                border: '1px solid var(--glass-border)',
-                padding: '12px',
-                borderRadius: '8px',
-                color: 'white',
-                outline: 'none'
-              }}
-            />
-          </div>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+            L'authentification est déléguée à notre serveur sécurisé Keycloak. Vous allez être redirigé.
+          </p>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <label style={{ fontSize: '0.9rem', fontWeight: '500' }}>Mot de passe</label>
-            <input 
-              type="password" 
-              placeholder="••••••••"
-              style={{
-                background: 'rgba(0, 0, 0, 0.2)',
-                border: '1px solid var(--glass-border)',
-                padding: '12px',
-                borderRadius: '8px',
-                color: 'white',
-                outline: 'none'
-              }}
-            />
-          </div>
+          <button 
+            type="button" 
+            className="btn-primary" 
+            style={{ width: '100%', padding: '16px' }}
+            onClick={() => signIn("keycloak", { callbackUrl: "/dashboard" })}
+          >
+            Se connecter via Keycloak
+          </button>
 
-          <Link href="/dashboard" style={{ textDecoration: 'none', width: '100%', marginTop: '1rem' }}>
-            <button type="button" className="btn-primary" style={{ width: '100%' }}>
-              Se connecter (Simulation)
-            </button>
-          </Link>
-
-        </form>
-
-        <div style={{ textAlign: 'center', marginTop: '2rem', fontSize: '0.85rem' }}>
-          <p style={{ opacity: 0.7 }}>Redirection sécurisée via Keycloak OAuth2 en production.</p>
         </div>
-
       </div>
     </div>
   );
