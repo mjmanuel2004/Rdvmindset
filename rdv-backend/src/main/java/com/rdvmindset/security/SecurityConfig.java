@@ -35,7 +35,7 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(authz -> authz
-                .requestMatchers("/api/public/**", "/actuator/health", "/api/v1/companies/register").permitAll()
+                .requestMatchers("/api/public/**", "/actuator/health", "/api/v1/companies/register", "/ws-endpoint/**").permitAll()
                 .anyRequest().authenticated()
             )
             .oauth2ResourceServer(oauth2 -> oauth2

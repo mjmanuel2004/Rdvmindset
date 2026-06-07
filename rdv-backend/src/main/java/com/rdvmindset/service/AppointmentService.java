@@ -30,6 +30,7 @@ public class AppointmentService {
     private final AvailabilityRepository availabilityRepository;
     private final AgentRepository agentRepository;
     private final UserService userService;
+    private final WebSocketNotificationService notificationService;
 
     /**
      * Recherche un client par téléphone ou email, ou le crée s'il n'existe pas.
@@ -159,6 +160,11 @@ public class AppointmentService {
 
         log.info("Rendez-vous créé le {} pour le client {} {}", appointment.getDateTime(), client.getFirstName(), client.getLastName());
 
-        return AppointmentResponse.fromEntity(appointment);
+        AppointmentResponse response = AppointmentResponse.fromEntity(appointment);
+        
+        // 5. Envoi de la notification WebSocket en temps réel
+        notificationService.notifyNewAppointment(company.getId(), response);
+
+        return response;
     }
 }
