@@ -31,6 +31,7 @@ public class AppointmentService {
     private final AgentRepository agentRepository;
     private final UserService userService;
     private final WebSocketNotificationService notificationService;
+    private final GoogleCalendarService googleCalendarService;
 
     /**
      * Recherche un client par téléphone ou email, ou le crée s'il n'existe pas.
@@ -159,6 +160,12 @@ public class AppointmentService {
         appointment = appointmentRepository.save(appointment);
 
         log.info("Rendez-vous créé le {} pour le client {} {}", appointment.getDateTime(), client.getFirstName(), client.getLastName());
+
+        // Créer l'événement dans Google Calendar s'il est configuré
+        googleCalendarService.createEvent(appointment);
+        
+        // Comme googleCalendarService peut avoir modifié l'entité (googleEventId), on la resauvegarde
+        appointment = appointmentRepository.save(appointment);
 
         AppointmentResponse response = AppointmentResponse.fromEntity(appointment);
         
