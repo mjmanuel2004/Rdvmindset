@@ -111,7 +111,7 @@ public class AppointmentService {
     }
 
     /**
-     * Crée un nouveau rendez-vous.
+     * Crée un nouveau rendez-vous via l'API standard (utilise le JWT de l'utilisateur connecté).
      */
     @Transactional
     public AppointmentResponse createAppointment(AppointmentCreateRequest request) {
@@ -122,6 +122,14 @@ public class AppointmentService {
             throw new IllegalStateException("L'utilisateur n'est rattaché à aucune entreprise");
         }
 
+        return createAppointmentForCompany(request, company);
+    }
+
+    /**
+     * Crée un nouveau rendez-vous pour une entreprise donnée (utilisé par le Webhook IA ou en interne).
+     */
+    @Transactional
+    public AppointmentResponse createAppointmentForCompany(AppointmentCreateRequest request, Company company) {
         // 1. Vérification de disponibilité stricte
         List<LocalTime> availableSlots = getAvailableSlots(company.getId(), request.getDateTime().toLocalDate(), request.getDurationMinutes());
         if (!availableSlots.contains(request.getDateTime().toLocalTime())) {
